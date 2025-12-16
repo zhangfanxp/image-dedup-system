@@ -1,6 +1,10 @@
+拉取项目镜像
+
+git clone https://github.com/zhangfanxp/image-dedup-system.git
+
 1、创建uv虚拟环境并激活
 
-uv vent --python 3.12 && source .venv/bin/activate
+uv venv --python 3.12 && source .venv/bin/activate
 
 2、安装项目依赖
 
