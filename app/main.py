@@ -1,7 +1,7 @@
 import streamlit as st
 from pathlib import Path
 import shutil
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from utils.unzip import unzip
 from utils.image_scan import scan_images
@@ -33,6 +33,11 @@ TEMP_DIR.mkdir(exist_ok=True)
 LIB_DIR.mkdir(exist_ok=True)
 
 # =====================
+# 图片格式过滤
+# =====================
+VALID_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
+
+# =====================
 # Session State
 # =====================
 if "results" not in st.session_state:
@@ -61,15 +66,16 @@ if uploaded and st.button("🚀 开始检测"):
         # 解压 ZIP
         unzip(zip_path, TEMP_DIR)
 
-        # 扫描图片
-        images = scan_images(TEMP_DIR)
+        # 扫描图片并过滤非图片文件
+        images = [f for f in scan_images(TEMP_DIR) if f.suffix.lower() in VALID_EXTS]
         if not images:
             st.warning("未发现合法图片")
             st.stop()
 
-        library_images = list(LIB_DIR.glob("*.*"))
-        results = []
+        # 获取库中图片，过滤非图片文件
+        library_images = [f for f in LIB_DIR.iterdir() if f.suffix.lower() in VALID_EXTS]
 
+        results = []
         total_images = len(images)
         progress_bar = st.progress(0)  # 创建进度条
         status_text = st.empty()       # 显示文字进度
@@ -97,7 +103,10 @@ if uploaded and st.button("🚀 开始检测"):
                 similar_idx += 1
                 continue
             for lib_img in library_images:
-                similar, sim_ratio = is_similar_cnn(r["path"], lib_img, threshold=0.85)
+                try:
+                    similar, sim_ratio = is_similar_cnn(r["path"], lib_img, threshold=0.85)
+                except UnidentifiedImageError:
+                    continue  # 跳过无法识别的图片
                 if similar:
                     r["status"] = "相似"
                     r["similar_ratio"] = int(sim_ratio * 100)
