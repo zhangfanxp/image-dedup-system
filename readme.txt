@@ -26,3 +26,18 @@ streamlit run app/main.py
 ----------------------------------------------------------------
 
 app/db文件夹下的session.py中,要把mysql的root密码改为你本地设置的密码.
+
+----------------------------------------------------------------
+
+设置开机自启动:
+
+1、将《开机自启动》文件夹下的start_streamlit.sh文件拷贝到home文件夹下;
+
+2、运行赋权命令:
+chmod +x ~/start_streamlit.sh
+
+3、在把com.frank.streamlit.plist文件复制到 ~/Library/LaunchAgents/ 目录下
+
+4、加载plist文件:
+launchctl load ~/Library/LaunchAgents/com.frank.streamlit.plist
+
