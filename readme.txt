@@ -37,7 +37,10 @@ app/db文件夹下的session.py中,要把mysql的root密码改为你本地设置
 chmod +x ~/start_streamlit.sh
 
 3、在把com.frank.streamlit.plist文件复制到 ~/Library/LaunchAgents/ 目录下
+(注意,要更改其中的your_username为你当前Mac系统的用户名)
 
 4、加载plist文件:
 launchctl load ~/Library/LaunchAgents/com.frank.streamlit.plist
+
+
 
