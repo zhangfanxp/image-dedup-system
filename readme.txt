@@ -16,7 +16,8 @@ mysql -u root -p < setup.sql
 
 4、把模型文件resnet50-11ad3fa6.pth拷贝至系统文件夹
 
-.cache/torch/hub/checkpoints/
+mkdir -p ~/.cache/torch/hub/checkpoints
+cp resnet50-11ad3fa6.pth ~/.cache/torch/hub/checkpoints/
 
 5、运行命令
 
@@ -29,18 +30,20 @@ app/db文件夹下的session.py中,要把mysql的root密码改为你本地设置
 
 ----------------------------------------------------------------
 
-设置开机自启动:
 
-1、将《开机自启动》文件夹下的start_streamlit.sh文件拷贝到home文件夹下;
+设置快速启动命令:
 
-2、运行赋权命令:
-chmod +x ~/start_streamlit.sh
+vi ~/.zshrc
 
-3、在把com.frank.streamlit.plist文件复制到 ~/Library/LaunchAgents/ 目录下
-(注意,要更改其中的your_username为你当前Mac系统的用户名)
+文件末尾加入:
 
-4、加载plist文件:
-launchctl load ~/Library/LaunchAgents/com.frank.streamlit.plist
+alias chachong='cd ~/Downloads/image-dedup-system && source .venv/bin/activate && streamlit run app/main.py'
 
+保存并退出.
 
+更新配置文件
+source ~/.zshrc
+
+命令行输入:
+chachong 回车即可!
 
