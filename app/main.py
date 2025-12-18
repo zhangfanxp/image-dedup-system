@@ -1,4 +1,6 @@
 import streamlit as st
+import torch
+
 from pathlib import Path
 import shutil
 from PIL import Image, UnidentifiedImageError
@@ -7,18 +9,36 @@ from utils.unzip import unzip
 from utils.image_scan import scan_images
 from utils.hash import calc_md5
 from utils.similarity import is_similar_cnn
+
 from db.image_repo import get_image_by_md5
 from db.session import SessionLocal
 from sqlalchemy import text
+
 
 # =====================
 # 页面配置
 # =====================
 st.set_page_config(
-    page_title="图片查重系统（CNN + MPS）",
+    page_title="图片查重系统（CNN + CUDA）",
     layout="wide"
 )
-st.title("📷 图片查重 / 相似检测系统（CNN + MPS）")
+st.title("📷 图片查重 / 相似检测系统（CNN + CUDA）")
+
+
+# =====================
+# 运行设备显示（关键）
+# =====================
+def get_device_info():
+    if torch.cuda.is_available():
+        return f"CUDA GPU: {torch.cuda.get_device_name(0)}"
+    return "CPU"
+
+st.sidebar.markdown("### ⚙️ 运行环境")
+if torch.cuda.is_available():
+    st.sidebar.success(get_device_info())
+else:
+    st.sidebar.warning(get_device_info())
+
 
 # =====================
 # 目录配置
@@ -32,16 +52,19 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 TEMP_DIR.mkdir(exist_ok=True)
 LIB_DIR.mkdir(exist_ok=True)
 
+
 # =====================
 # 图片格式过滤
 # =====================
 VALID_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
+
 
 # =====================
 # Session State
 # =====================
 if "results" not in st.session_state:
     st.session_state.results = None
+
 
 # =====================
 # 上传 ZIP
@@ -52,6 +75,7 @@ if uploaded:
     with open(zip_path, "wb") as f:
         f.write(uploaded.getbuffer())
     st.success(f"ZIP 已上传：{uploaded.name}")
+
 
 # =====================
 # 开始检测
@@ -66,21 +90,23 @@ if uploaded and st.button("🚀 开始检测"):
         # 解压 ZIP
         unzip(zip_path, TEMP_DIR)
 
-        # 扫描图片并过滤非图片文件
+        # 扫描图片
         images = [f for f in scan_images(TEMP_DIR) if f.suffix.lower() in VALID_EXTS]
         if not images:
             st.warning("未发现合法图片")
             st.stop()
 
-        # 获取库中图片，过滤非图片文件
+        # 图片库
         library_images = [f for f in LIB_DIR.iterdir() if f.suffix.lower() in VALID_EXTS]
 
         results = []
         total_images = len(images)
-        progress_bar = st.progress(0)  # 创建进度条
-        status_text = st.empty()       # 显示文字进度
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-        # 检测重复 + 填充结果
+        # =====================
+        # 重复检测（MD5）
+        # =====================
         for idx, img in enumerate(images):
             md5 = calc_md5(img)
             record = get_image_by_md5(md5)
@@ -96,33 +122,41 @@ if uploaded and st.button("🚀 开始检测"):
             progress_bar.progress((idx + 1) / total_images * 0.5)
             status_text.text(f"🔍 重复检测中：{idx + 1}/{total_images}")
 
-        # 检测相似
+        # =====================
+        # 相似检测（CNN）
+        # =====================
         similar_idx = 0
         for r in results:
             if r["status"] != "正常":
                 similar_idx += 1
                 continue
+
             for lib_img in library_images:
                 try:
-                    similar, sim_ratio = is_similar_cnn(r["path"], lib_img, threshold=0.85)
+                    similar, sim_ratio = is_similar_cnn(
+                        r["path"], lib_img, threshold=0.85
+                    )
                 except UnidentifiedImageError:
-                    continue  # 跳过无法识别的图片
+                    continue
+
                 if similar:
                     r["status"] = "相似"
                     r["similar_ratio"] = int(sim_ratio * 100)
                     r["db_similar_image"] = lib_img.name
                     break
+
             similar_idx += 1
             progress_bar.progress(0.5 + (similar_idx / total_images * 0.5))
             status_text.text(f"🔍 相似检测中：{similar_idx}/{total_images}")
 
-        # 按状态排序
+        # 排序
         status_order = {"相似": 0, "重复": 1, "正常": 2}
         results.sort(key=lambda x: status_order.get(x["status"], 3))
 
         st.session_state.results = results
         progress_bar.progress(1.0)
         status_text.text("✅ 检测完成！")
+
 
 # =====================
 # 没结果就退出
@@ -132,6 +166,7 @@ if not st.session_state.results:
     st.stop()
 
 results = st.session_state.results
+
 
 # =====================
 # 统计
@@ -150,8 +185,9 @@ st.markdown(
     """
 )
 
+
 # =====================
-# 重复 / 相似路径（实时计算）
+# 问题图片路径
 # =====================
 problem_paths = [
     str(r["path"].relative_to(TEMP_DIR))
@@ -163,12 +199,13 @@ st.markdown("### 📋 重复 / 相似图片路径")
 
 if problem_paths:
     st.text_area(
-        "请复制以下内容（Cmd + A → Cmd + C）",
+        "请复制以下内容（Ctrl + A → Ctrl + C）",
         value="\n".join(problem_paths),
         height=220
     )
 else:
     st.success("🎉 当前没有需要处理的重复或相似图片")
+
 
 # =====================
 # 正常图片入库
@@ -180,10 +217,12 @@ if st.button("📥 正常图片入库"):
         for r in results:
             if r["status"] != "正常":
                 continue
+
             src = r["path"]
             dst = LIB_DIR / src.name
             if dst.exists():
                 dst = LIB_DIR / f"{r['md5']}_{src.name}"
+
             shutil.copy2(src, dst)
 
             with Image.open(dst) as im:
@@ -192,8 +231,8 @@ if st.button("📥 正常图片入库"):
             session.execute(
                 text("""
                 INSERT INTO image_library
-                (image_name,image_path,md5,width,height)
-                VALUES (:n,:p,:m,:w,:h)
+                (image_name, image_path, md5, width, height)
+                VALUES (:n, :p, :m, :w, :h)
                 """),
                 {
                     "n": dst.name,
@@ -213,8 +252,9 @@ if st.button("📥 正常图片入库"):
     finally:
         session.close()
 
+
 # =====================
-# 图片展示 + 相似对比
+# 图片展示
 # =====================
 st.markdown("### 🖼 图片详情")
 cols = st.columns(4)

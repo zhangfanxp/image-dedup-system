@@ -7,6 +7,15 @@ git clone https://github.com/zhangfanxp/image-dedup-system.git
 uv venv --python 3.12 && source .venv/bin/activate
 
 2、安装项目依赖
+uv pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 \
+  --index-url https://download.pytorch.org/whl/cu118
+
+验证GPU
+python - <<EOF
+import torch
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0))
+EOF
 
 uv pip install -r requirements.txt
 
